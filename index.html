@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Calculadora de Horas</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1><i class="fas fa-clock"></i> Calculadora de Horas Trabajadas</h1>
+      <div class="config-panel">
+        <div class="config-item">
+          <label for="mes">Mes:</label>
+          <select id="mes" class="mes-selector">
+            <option value="0">Enero</option>
+            <option value="1">Febrero</option>
+            <option value="2">Marzo</option>
+            <option value="3">Abril</option>
+            <option value="4">Mayo</option>
+            <option value="5">Junio</option>
+            <option value="6">Julio</option>
+            <option value="7">Agosto</option>
+            <option value="8">Septiembre</option>
+            <option value="9">Octubre</option>
+            <option value="10">Noviembre</option>
+            <option value="11">Diciembre</option>
+          </select>
+        </div>
+        <div class="config-item">
+          <label for="anio">Año:</label>
+          <input type="number" id="anio" min="2000" max="2100">
+        </div>
+        <div class="config-item">
+          <label for="valor-diurno">Valor Hora Diurna:</label>
+          <input type="number" id="valor-diurno" value="3300" min="0">
+        </div>
+        <div class="config-item">
+          <label for="valor-nocturno">Valor Hora Nocturna:</label>
+          <input type="number" id="valor-nocturno" value="3630" min="0">
+        </div>
+        <button id="aplicar-config" class="btn"><i class="fas fa-sync-alt"></i> Aplicar</button>
+      </div>
+    </header>
+
+    <main>
+      <div class="table-container">
+        <table>
+          <thead>
+            <tr>
+              <th>Fecha</th>
+              <th>Entrada</th>
+              <th>Salida</th>
+              <th>Horas Diurnas</th>
+              <th>Horas Nocturnas</th>
+              <th>$ Diurnas</th>
+              <th>$ Nocturnas</th>
+              <th>Total Día</th>
+            </tr>
+          </thead>
+          <tbody id="tabla">
+            <!-- Las filas se generan dinámicamente -->
+          </tbody>
+        </table>
+      </div>
+
+      <div class="summary">
+        <div class="total-box">
+          <h3>Total General: <span id="total">$ 0</span></h3>
+        </div>
+        <div class="breakdown">
+          <p>Horas Diurnas Totales: <span id="total-diu">0</span></p>
+          <p>Horas Nocturnas Totales: <span id="total-noc">0</span></p>
+        </div>
+      </div>
+    </main>
+
+    <footer>
+      <button id="exportar" class="btn"><i class="fas fa-file-export"></i> Exportar a CSV</button>
+      <button id="limpiar" class="btn btn-secondary"><i class="fas fa-broom"></i> Limpiar Todo</button>
+    </footer>
+  </div>
+
+  <script>
+    // Elementos del DOM
+    const tabla = document.getElementById("tabla");
+    const totalSpan = document.getElementById("total");
+    const totalDiuSpan = document.getElementById("total-diu");
+    const totalNocSpan = document.getElementById("total-noc");
+    
+    // Variables de configuración
+    let valorDiurno = 3300;
+    let valorNocturno = 3630;
+    
+    // Inicializar selectores de fecha
+    const fechaActual = new Date();
+    document.getElementById('mes').value = fechaActual.getMonth();
+    document.getElementById('anio').value = fechaActual.getFullYear();
+
+    // Función para generar fechas del mes seleccionado
+    function generarFechas() {
+      const mes = parseInt(document.getElementById('mes').value);
+      const anio = parseInt(document.getElementById('anio').value);
+      const diasEnMes = new Date(anio, mes + 1, 0).getDate();
+      const fechas = [];
+
+      const opciones = { month: 'short', day: 'numeric' };
+      
+      for (let dia = 1; dia <= diasEnMes; dia++) {
+        const fecha = new Date(anio, mes, dia);
+        const fechaFormateada = fecha.toLocaleDateString('es-ES', opciones);
+        fechas.push(fechaFormateada.replace(/ /g, '-'));
+      }
+
+      return fechas;
+    }
+
+    // Inicializar tabla con las fechas
+    function inicializarTabla() {
+      tabla.innerHTML = '';
+      const fechas = generarFechas();
+
+      fechas.forEach(fecha => {
+        const tr = document.createElement("tr");
+        tr.dataset.fecha = fecha;
+
+        tr.innerHTML = `
+          <td>${fecha}</td>
+          <td><input type="time" class="entrada" aria-label="Hora de entrada para ${fecha}"></td>
+          <td><input type="time" class="salida" aria-label="Hora de salida para ${fecha}"></td>
+          <td class="hdiu">0.0</td>
+          <td class="hnoc">0.0</td>
+          <td class="valdiu">$ 0</td>
+          <td class="valnoc">$ 0</td>
+          <td class="total-dia">$ 0</td>
+        `;
+
+        tabla.appendChild(tr);
+      });
+    }
+
+    // Calcular horas trabajadas
+    function calcularHoras() {
+      let total = 0;
+      let totalDiu = 0;
+      let totalNoc = 0;
+
+      document.querySelectorAll("#tabla tr").forEach(tr => {
+        const entrada = tr.querySelector(".entrada").value;
+        const salida = tr.querySelector(".salida").value;
+
+        if (!entrada || !salida) {
+          resetearFila(tr);
+          return;
+        }
+
+        let hEntrada = new Date(`2020-01-01T${entrada}`);
+        let hSalida = new Date(`2020-01-01T${salida}`);
+        if (hSalida <= hEntrada) hSalida.setDate(hSalida.getDate() + 1);
+
+        let hDiurnas = 0;
+        let hNocturnas = 0;
+
+        let current = new Date(hEntrada);
+        while (current < hSalida) {
+          const hora = current.getHours();
+          if (hora >= 21 || hora < 6) {  // Horas nocturnas de 21:00 a 5:59
+            hNocturnas += 0.5;
+          } else {
+            hDiurnas += 0.5;
+          }
+          current.setMinutes(current.getMinutes() + 30);
+        }
+
+        const valDiu = hDiurnas * valorDiurno;
+        const valNoc = hNocturnas * valorNocturno;
+        const totalDia = valDiu + valNoc;
+
+        tr.querySelector(".hdiu").textContent = hDiurnas.toFixed(1);
+        tr.querySelector(".hnoc").textContent = hNocturnas.toFixed(1);
+        tr.querySelector(".valdiu").textContent = `$ ${valDiu.toLocaleString('es-ES')}`;
+        tr.querySelector(".valnoc").textContent = `$ ${valNoc.toLocaleString('es-ES')}`;
+        tr.querySelector(".total-dia").textContent = `$ ${totalDia.toLocaleString('es-ES')}`;
+
+        total += totalDia;
+        totalDiu += hDiurnas;
+        totalNoc += hNocturnas;
+      });
+
+      totalSpan.textContent = `$ ${total.toLocaleString('es-ES')}`;
+      totalDiuSpan.textContent = totalDiu.toFixed(1);
+      totalNocSpan.textContent = totalNoc.toFixed(1);
+    }
+
+    function resetearFila(tr) {
+      tr.querySelector(".hdiu").textContent = "0.0";
+      tr.querySelector(".hnoc").textContent = "0.0";
+      tr.querySelector(".valdiu").textContent = "$ 0";
+      tr.querySelector(".valnoc").textContent = "$ 0";
+      tr.querySelector(".total-dia").textContent = "$ 0";
+    }
+
+    // Exportar a CSV
+    function exportarCSV() {
+      let csv = "Fecha,Entrada,Salida,Horas Diurnas,Horas Nocturnas,Valor Diurno,Valor Nocturno,Total Día\n";
+      
+      document.querySelectorAll("#tabla tr").forEach(tr => {
+        const fecha = tr.dataset.fecha;
+        const entrada = tr.querySelector(".entrada").value || "";
+        const salida = tr.querySelector(".salida").value || "";
+        const hdiu = tr.querySelector(".hdiu").textContent;
+        const hnoc = tr.querySelector(".hnoc").textContent;
+        const valdiu = tr.querySelector(".valdiu").textContent.replace("$ ", "");
+        const valnoc = tr.querySelector(".valnoc").textContent.replace("$ ", "");
+        const totalDia = tr.querySelector(".total-dia").textContent.replace("$ ", "");
+        
+        csv += `${fecha},${entrada},${salida},${hdiu},${hnoc},${valdiu},${valnoc},${totalDia}\n`;
+      });
+
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.setAttribute('href', url);
+      link.setAttribute('download', `horas_trabajadas_${document.getElementById('mes').options[document.getElementById('mes').selectedIndex].text}_${document.getElementById('anio').value}.csv`);
+      link.style.visibility = 'hidden';
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+
+    // Limpiar todo
+    function limpiarTodo() {
+      if (confirm("¿Estás seguro de que quieres limpiar todos los datos?")) {
+        document.querySelectorAll("#tabla tr").forEach(tr => {
+          tr.querySelector(".entrada").value = "";
+          tr.querySelector(".salida").value = "";
+          resetearFila(tr);
+        });
+        calcularHoras();
+      }
+    }
+
+    // Event Listeners
+    document.addEventListener("DOMContentLoaded", inicializarTabla);
+    document.addEventListener("input", calcularHoras);
+    
+    document.getElementById("aplicar-config").addEventListener("click", function() {
+      valorDiurno = parseInt(document.getElementById("valor-diurno").value) || 0;
+      valorNocturno = parseInt(document.getElementById("valor-nocturno").value) || 0;
+      calcularHoras();
+    });
+
+    document.getElementById('mes').addEventListener('change', inicializarTabla);
+    document.getElementById('anio').addEventListener('change', inicializarTabla);
+    document.getElementById("exportar").addEventListener("click", exportarCSV);
+    document.getElementById("limpiar").addEventListener("click", limpiarTodo);
+  </script>
+</body>
+</html>
